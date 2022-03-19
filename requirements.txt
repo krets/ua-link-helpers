@@ -1,0 +1,5 @@
+openpyxl
+pytz
+requests
+requests_cache
+telethon
