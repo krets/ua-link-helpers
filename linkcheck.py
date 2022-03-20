@@ -6,6 +6,7 @@ import re
 from multiprocessing.dummy import Pool
 from collections import defaultdict
 
+import bs4
 import openpyxl
 import requests
 import requests_cache
@@ -44,38 +45,47 @@ def get_links(xls):
                     links[name].append(match.groups()[0])
     return links
 
-def link_check(item):
-    sheet, url = item
-    LOG.debug("Getting (%s) %s", sheet, url)
-
+def link_check(url):
+    LOG.debug("Getting %s", url)
     try:
         resp = requests.get(url, allow_redirects=True, headers=_HEADERS, verify=False)
     except ConnectionError as error:
         LOG.warning("Error connecting to %s: %s", url, error)
-        return sheet, '0', url, "", "ConnectionError", ""
+        return '0', url, "", "ConnectionError", "", ""
 
-    try:
-        title = str(resp.content).split("<title>")[-1].split("title>")[0][:-2][:100]
-    except:
-        title = "?"
 
+    description = title = ""
+    if 'html' in resp.headers.get('Content-Type', ''):
+        page = bs4.BeautifulSoup(resp.content,  'html.parser')
+        title_elem = page.find('title')
+        if title_elem:
+            title = title_elem.text.strip()
+        meta_og_desc = page.find("meta", {"property": "og:description"})
+        if meta_og_desc:
+            description = meta_og_desc.attrs.get('content', '')
+            description = description.replace("\n", " ").replace("\r", " ")
     redirect = ""
     if url != resp.url:
         redirect = resp.url
 
-    return sheet, str(resp.status_code), url, redirect, title, resp.headers.get('Server', '')
+    return str(resp.status_code), url, redirect, title, resp.headers.get('Server', ''), description
 
 
 def test_links(all_links):
     pool = Pool()
-    rows = ["Sheet", "Status", "Link", "Redirect", "Title", 'Server']
-    work = []
+    rows = [["Sheet", "Status", "Link", "Redirect", "Title", 'Server', "Description"]]
+    work = set()
     for sheet, links in all_links.items():
         for url in links:
-            work.append((sheet, url))
-
-    report = pool.map(link_check, work)
-    return [rows]+report
+            work.add(url)
+    work = list(work)
+    LOG.debug("Ready to lookup %s links", len(work))
+    result = pool.map(link_check, work)
+    lookup = dict(zip(work, result))
+    for sheet, links in all_links.items():
+        for url in links:
+            rows.append([sheet] + list(lookup.get(url)))
+    return rows
 
 
 def main():
@@ -87,7 +97,15 @@ def main():
         level = logging.DEBUG
     LOG.setLevel(level)
     report = test_links(get_links(args.xls))
+
+    output = None
+    if args.output:
+        output = open(args.output, 'w', encoding="utf-8")
+
     for row in report:
+        line = "\t".join(row)
+        if output:
+            output.write(line+"\n")
         print("\t".join(row))
     pass
 
@@ -96,9 +114,12 @@ def parse_args():
     parser.add_argument('xls', help="Excel document to read")
     parser.add_argument('-d', '--debug', action='store_true', help='Show debug messages.')
     parser.add_argument('-v', '--verbose', action='store_true', help='Show info messages.')
+    parser.add_argument('-o', '--output', type=str, help='Path to output tsv')
     return parser.parse_args()
 
 if __name__ == '__main__':
+    LOG.addHandler(logging.StreamHandler())
+    LOG.handlers[-1].setFormatter(logging.Formatter(logging.BASIC_FORMAT))
     requests_cache.install_cache()
     requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
     main()

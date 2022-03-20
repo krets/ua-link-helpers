@@ -115,4 +115,6 @@ def parse_args():
     return parser.parse_args()
 
 if __name__=='__main__':
+    LOG.addHandler(logging.StreamHandler())
+    LOG.handlers[-1].setFormatter(logging.Formatter(logging.BASIC_FORMAT))
     main()

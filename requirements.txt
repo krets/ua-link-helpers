@@ -3,3 +3,4 @@ pytz
 requests
 requests_cache
 telethon
+beautifulsoup4
