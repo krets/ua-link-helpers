@@ -65,7 +65,7 @@ def main():
         newest = None
         kwargs = {'limit': 200}
         try:
-            for _ in range(99):
+            for _ in range(999):
                 LOG.debug("Iter (%d) on %s", _, channel_name)
                 for message in client.get_messages(channel_id, **kwargs):
                     date_string = message.date.strftime(DATE_FMT)
@@ -77,7 +77,7 @@ def main():
                     for url in URL_RE.findall(str(message.message)):
                         links[channel_name].append((url, date_string))
                 if oldest.date < threshhold:
-                    LOG.debug("Oldest message exceeds window")
+                    LOG.debug("Oldest message exceeds window: %s", oldest.date)
                     LOG.info("Channel complete")
                     break
                 else:
@@ -91,12 +91,12 @@ def main():
     if args.compare:
         existing_links = linkcheck.get_links(args.compare)
 
-    with open(args.output, 'w') as fh:
+    with open(args.output, 'w', encoding="utf-8") as fh:
         for channel_name, items in links.items():
             for url, timestamp in items:
                 found_sheet = []
-                for sheet, links in existing_links.items():
-                    if url in links:
+                for sheet, elinks in existing_links.items():
+                    if url in elinks:
                         found_sheet.append(sheet)
 
                 line = "\t".join([str(channel_name), url, timestamp, ','.join(found_sheet)])
