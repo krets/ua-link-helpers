@@ -96,7 +96,16 @@ def main():
     if args.debug:
         level = logging.DEBUG
     LOG.setLevel(level)
-    report = test_links(get_links(args.xls))
+    if args.doc.endswith('tsv'):
+        links = []
+        with open(args.doc, 'r', encoding='utf-8') as fh:
+            for line in fh:
+                links.append(line.split("\t")[1])
+        links = list(set(links))
+        links.sort()
+        report = test_links({args.doc: links})
+    else:
+        report = test_links(get_links(args.doc))
 
     output = None
     if args.output:
@@ -111,7 +120,7 @@ def main():
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('xls', help="Excel document to read")
+    parser.add_argument('doc', help="Excel or TSV document to read")
     parser.add_argument('-d', '--debug', action='store_true', help='Show debug messages.')
     parser.add_argument('-v', '--verbose', action='store_true', help='Show info messages.')
     parser.add_argument('-o', '--output', type=str, help='Path to output tsv')
